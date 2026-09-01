@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kit Financiero</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--bg:#0f0f12;--card:#1a1a20;--card2:#24242f;--accent:#a3ff12;--accent2:#7c5cff;--text:#f5f5f7;--muted:#9a9ab0;--danger:#ff4d6d;--success:#00e5a0;--border:rgba(255,255,255,0.08)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;padding:16px}
+h1,h2,h3{font-family:'Space Grotesk',sans-serif}
+.header{max-width:1100px;margin:0 auto 20px;display:flex;justify-content:space-between;align-items:center}
+.balance-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;max-width:1100px;margin:0 auto 20px}
+.stat{background:linear-gradient(145deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:20px;padding:18px}
+.stat-label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.stat-value{font-size:26px;font-weight:700;margin:8px 0}
+.tabs{display:flex;gap:8px;max-width:1100px;margin:0 auto 16px;overflow-x:auto}
+.tab{padding:10px 18px;border-radius:999px;background:var(--card);border:1px solid var(--border);color:var(--muted);cursor:pointer;white-space:nowrap;font-weight:600;font-size:13px}
+.tab.active{background:var(--text);color:var(--bg)}
+.main{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.2fr 0.8fr;gap:16px}
+@media(max-width:850px){.main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px}
+.btn{border:0;border-radius:999px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px}
+.btn-primary{background:var(--accent);color:#000}.btn-ghost{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.input,select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:11px 12px;color:var(--text);font-size:14px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.list{max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.item{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:10px 12px}
+.progress{height:8px;background:var(--bg);border:1px solid var(--border);border-radius:999px;overflow:hidden;margin:8px 0}.progress>div{height:100%;border-radius:999px}
+canvas{width:100%!important;height:180px!important}.del{cursor:pointer;opacity:.6}.del:hover{opacity:1;color:var(--danger)}
+#pin-lock{position:fixed;inset:0;background:#0f0f12;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+.pin-box{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:28px;width:100%;max-width:320px;text-align:center}
+.pin-input{letter-spacing:12px;font-size:28px;text-align:center;font-weight:700}
+</style>
+</head>
+<body>
+<div id="pin-lock"><div class="pin-box"><h3>🔒 Kit Financiero</h3><p id="pin-msg" style="color:var(--muted);font-size:13px;margin:10px 0 14px">Crea tu PIN de 4 dígitos</p><input id="pin" class="input pin-input" type="password" maxlength="4" inputmode="numeric" placeholder="••••"><br><br><button class="btn btn-primary" style="width:100%" onclick="checkPin()">Entrar</button><div id="sync-status" style="font-size:11px;color:var(--muted);margin-top:10px">Firebase desconectado</div><br><small id="pin-reset" style="color:var(--muted);cursor:pointer;text-decoration:underline;display:none" onclick="resetPin()">Olvidé mi PIN</small></div></div>
+
+<div class="header"><div><h1>Kit <span style="color:var(--accent)">Financiero</span></h1><div class="sub" style="color:var(--muted);font-size:13px"></div><div id="status-dot" style="font-size:12px;color:var(--success)">● Conectando...</div></div><button class="btn btn-ghost" onclick="logoutPin()">🔒 Bloquear</button></div>
+
+<div class="balance-grid">
+  <div class="stat"><div class="stat-label">Balance Total</div><div class="stat-value" id="balance">$0</div></div>
+  <div class="stat"><div class="stat-label">Ingresos Mes</div><div class="stat-value" style="color:var(--success)" id="ingresos">$0</div></div>
+  <div class="stat"><div class="stat-label">Gastos Mes</div><div class="stat-value" style="color:var(--danger)" id="gastos">$0</div></div>
+  <div class="stat"><div class="stat-label">Ahorro Metas</div><div class="stat-value" style="color:var(--accent)" id="ahorro">$0</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('mov',this)">💳 Movimientos</button>
+  <button class="tab" onclick="switchTab('pres',this)">📊 Presupuestos</button>
+  <button class="tab" onclick="switchTab('deudas',this)">💳 Deudas Cuotas</button>
+  <button class="tab" onclick="switchTab('metas',this)">🎯 Metas</button>
+</div>
+
+<div class="main">
+  <div id="panel-mov" class="card"><h3>Registrar Movimiento</h3><br><div style="display:grid;gap:10px"><div class="row"><select id="tipo"><option value="ingreso">💰 Ingreso</option><option value="gasto">💸 Gasto</option></select><input id="monto" class="input" type="number" placeholder="Monto COP"></div><div class="row"><select id="categoria"><option>Salario</option><option>Alimentación</option><option>Transporte(gasolina)</option><option>Arriendo</option><option>Servicios publicos</option><option>Entretenimiento</option><option>Aseo</option><option>Plan linea telefónica</option><option>Internet</option></select><input id="fecha" class="input" type="date"></div><input id="nota" class="input" placeholder="Nota"><button class="btn btn-primary" onclick="addMov()">+ Agregar</button></div><br><div class="list" id="lista-mov"></div></div>
+  <div>
+    <div id="panel-pres" class="card" style="display:none"><h3>Presupuestos</h3><br><div class="row"><select id="pres-cat"><option>Alimentación</option><option>Transporte (gasolina)</option><option>Arriendo</option><option>Servicios publicos</option><option>Entretenimiento</option><option>Aseo</option><option>Plan linea telefónica</option><option>Internet</option></select><input id="pres-monto" class="input" type="number" placeholder="Limite COP"></div><br><button class="btn btn-ghost" onclick="addPres()">Guardar</button><div class="list" id="lista-pres" style="margin-top:10px"></div></div>
+    <div id="panel-deudas" class="card" style="display:none"><h3>Deudas Sin Interés - En Cuotas</h3><br><input id="deuda-nombre" class="input" placeholder="Nombre deuda"><div class="row" style="margin-top:8px"><input id="deuda-total" class="input" type="number" placeholder="Total deuda"><input id="deuda-pagado" class="input" type="number" placeholder="Ya pagado"></div><div class="row" style="margin-top:8px"><input id="deuda-cuotas" class="input" type="number" placeholder="N° cuotas ej: 6"><input id="deuda-fecha" class="input" type="date"></div><br><button class="btn btn-primary" onclick="addDeuda()">+ Agregar Deuda</button><div class="list" id="lista-deudas" style="margin-top:10px"></div></div>
+    <div id="panel-metas" class="card" style="display:none"><h3>Metas Ahorro 🎯</h3><br><input id="meta-nombre" class="input" placeholder="Nombre meta"><div class="row" style="margin-top:8px"><input id="meta-objetivo" class="input" type="number" placeholder="Objetivo"><input id="meta-actual" class="input" type="number" placeholder="Actual"></div><br><button class="btn btn-primary" onclick="addMeta()">+ Crear Meta</button><div id="lista-metas" style="margin-top:12px;display:grid;gap:10px"></div></div>
+    <div class="card" style="margin-top:16px"><h3>Visual</h3><canvas id="chartMain"></canvas><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" onclick="exportPDF()">📄 PDF</button><button class="btn btn-ghost" onclick="exportData()">JSON</button><button class="btn btn-ghost" onclick="resetAll()">Borrar</button></div></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// PEGA AQUI TU CONFIG DE FIREBASE - la copias de Project Settings > General > Your apps
+const firebaseConfig = {
+  apiKey: "AIzaSyDLbSX5shavxRPSfgcBlXVJynMEnh9oF_Q",
+  authDomain: "mi-finzansas-personales.firebaseapp.com",
+  projectId: "mi-finzansas-personales",
+  storageBucket: "mi-finzansas-personales.firebasestorage.app",
+  messagingSenderId: "1086064927065",
+  appId: "1:1086064927065:web:b49920a489c0a896426c48",
+  measurementId: "G-DX6KWPPQD4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let data = JSON.parse(localStorage.getItem('kit-financiero-v2')||'{"movs":[],"pres":[],"deudas":[],"metas":[]}');
+let currentPin = localStorage.getItem('kit-pin');
+let unsubscribe = null;
+
+document.getElementById('fecha').valueAsDate=new Date();
+document.getElementById('deuda-fecha').valueAsDate=new Date();
+
+function initPin(){
+  const p=localStorage.getItem('kit-pin');
+  document.getElementById('pin-msg').textContent=p?'Ingresa tu PIN':'Crea tu PIN de 4 dígitos';
+  document.getElementById('pin-reset').style.display=p?'block':'none';
+  document.getElementById('sync-status').textContent='Ingresa el pin';
+}
+window.checkPin = function(){
+  const input=document.getElementById('pin').value;
+  const saved=localStorage.getItem('kit-pin');
+  if(!saved){
+    if(input.length!==4) return alert('PIN debe ser 4 dígitos');
+    localStorage.setItem('kit-pin',input);
+    currentPin=input;
+  } else {
+    if(input!==saved) return alert('PIN incorrecto');
+    currentPin=input;
+  }
+  document.getElementById('pin-lock').style.display='none';
+  startSync(currentPin);
+}
+function startSync(pin){
+  document.getElementById('status-dot').textContent = "● Sincronizando... PIN "+pin;
+  const ref = doc(db, "kits", pin);
+  if(unsubscribe) unsubscribe();
+  unsubscribe = onSnapshot(ref, (snap)=>{
+    if(snap.exists()){
+      const cloud = snap.data();
+      if(JSON.stringify(cloud)!== JSON.stringify(data)){
+        data = cloud;
+        localStorage.setItem('kit-financiero-v2', JSON.stringify(data));
+        renderAll();
+        document.getElementById('status-dot').textContent = "● Sincronizado ✓ " + new Date().toLocaleTimeString();
+      }
+    } else {
+      save();
+    }
+  }, (err)=>{
+    document.getElementById('status-dot').textContent = "● Error: revisa reglas Firestore";
+  });
+}
+window.save = async function(){
+  localStorage.setItem('kit-financiero-v2',JSON.stringify(data));
+  renderAll();
+  if(currentPin){
+    try{
+      await setDoc(doc(db, "kits", currentPin), data);
+      document.getElementById('status-dot').textContent = "● Guardado en nube ✓";
+    }catch(e){ console.log(e); }
+  }
+}
+window.logoutPin=function(){ if(unsubscribe) unsubscribe(); document.getElementById('pin').value=''; document.getElementById('pin-lock').style.display='flex'; initPin(); }
+window.resetPin=function(){ if(confirm('¿Borrar PIN y TODOS los datos?')){ localStorage.clear(); location.reload(); } }
+window.switchTab=function(t,el){document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));['mov','pres','deudas','metas'].forEach(id=>document.getElementById('panel-'+id).style.display=id===t?'block':'none');el.classList.add('active')}
+window.fmt=function(n){return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0)}
+window.addMov=function(){const m=+document.getElementById('monto').value;if(!m)return;data.movs.unshift({id:Date.now(),tipo:document.getElementById('tipo').value,categoria:document.getElementById('categoria').value,monto:m,fecha:document.getElementById('fecha').value,nota:document.getElementById('nota').value});save()}
+window.addPres=function(){const c=document.getElementById('pres-cat').value,m=+document.getElementById('pres-monto').value;if(!m)return;const ex=data.pres.find(p=>p.cat===c);if(ex)ex.monto=m;else data.pres.push({cat:c,monto:m});save()}
+window.addDeuda=function(){const n=document.getElementById('deuda-nombre').value,t=+document.getElementById('deuda-total').value;if(!n||!t)return;data.deudas.push({id:Date.now(),nombre:n,total:t,pagado:+document.getElementById('deuda-pagado').value||0,cuotas:+document.getElementById('deuda-cuotas').value||1,fechaLimite:document.getElementById('deuda-fecha').value});save()}
+window.addMeta=function(){const n=document.getElementById('meta-nombre').value,o=+document.getElementById('meta-objetivo').value;if(!n||!o)return;data.metas.push({id:Date.now(),nombre:n,objetivo:o,actual:+document.getElementById('meta-actual').value||0});save()}
+window.deleteItem=function(a,id){data[a]=data[a].filter(x=>x.id!==id);save()}
+window.renderAll=function(){const mes=new Date().toISOString().slice(0,7);const movMes=data.movs.filter(m=>m.fecha?.startsWith(mes));const ing=movMes.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+m.monto,0);const gas=movMes.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+m.monto,0);document.getElementById('ingresos').textContent=fmt(ing);document.getElementById('gastos').textContent=fmt(gas);document.getElementById('balance').textContent=fmt(ing-gas);document.getElementById('ahorro').textContent=fmt(data.metas.reduce((s,m)=>s+m.actual,0));document.getElementById('lista-mov').innerHTML=data.movs.map(m=>`<div class=item><div><b>${m.categoria}</b> ${m.fecha}<br><small>${m.nota||''}</small></div><div style=color:${m.tipo==='ingreso'?'#00e5a0':'#ff4d6d'}>${fmt(m.monto)} <span class=del onclick=deleteItem('movs',${m.id})>✕</span></div></div>`).join('');document.getElementById('lista-pres').innerHTML=data.pres.map(p=>{const g=data.movs.filter(m=>m.tipo==='gasto'&&m.categoria===p.cat&&m.fecha?.startsWith(mes)).reduce((s,m)=>s+m.monto,0);const pct=Math.min(100,Math.round(g/p.monto*100||0));return `<div class=item><div><b>${p.cat}</b><div class=progress style=width:150px><div style=width:${pct}%;background:${pct>90?'#ff4d6d':'#a3ff12'}></div></div>${fmt(g)}/${fmt(p.monto)}</div><span class=del onclick="data.pres=data.pres.filter(x=>x.cat!=='${p.cat}');save()">✕</span></div>`}).join('');document.getElementById('lista-deudas').innerHTML=data.deudas.map(d=>{const falta=d.total-d.pagado;const valorCuota=falta>0?(falta/(d.cuotas||1)):0;const pct=Math.round(d.pagado/d.total*100||0);return `<div class=item style=flex-direction:column;align-items:stretch><div style=display:flex;justify-content:space-between><b>${d.nombre}</b><span class=del onclick=deleteItem('deudas',${d.id})>✕</span></div><div class=progress><div style=width:${pct}%;background:#7c5cff></div></div><small style=line-height:1.4>Falta: <b>${fmt(falta)}</b> • ${d.cuotas} cuotas de <b>${fmt(valorCuota)}</b><br>Vence: ${d.fechaLimite||'sin fecha'} • ${pct}% pagado - SIN INTERÉS</small><button class="btn btn-ghost" style="margin-top:6px" onclick="let v=+prompt('¿Cuánto abonaste?');if(v){let deuda=data.deudas.find(x=>x.id===${d.id});deuda.pagado+=v;save()}">+ Abonar cuota</button></div>`}).join('');document.getElementById('lista-metas').innerHTML=data.metas.map(m=>`<div class=card style=background:#0f0f12><div style=display:flex;justify-content:space-between><b>${m.nombre}</b><span class=del onclick=deleteItem('metas',${m.id})>✕</span></div><div class=progress><div style=width:${Math.round(m.actual/m.objetivo*100||0)}%;background:#a3ff12></div></div><small>${fmt(m.actual)}/${fmt(m.objetivo)} - ${Math.round(m.actual/m.objetivo*100||0)}%</small><br><button class="btn btn-ghost" style="margin-top:6px" onclick="let v=+prompt('Agregar:');if(v){data.metas.find(x=>x.id===${m.id}).actual+=v;save()}">+ Ahorrar</button></div>`).join('');draw();}
+window.draw=function(){const canvas=document.getElementById('chartMain');const c=canvas.getContext('2d');const W=canvas.width=canvas.offsetWidth*2;const H=canvas.height=360;c.clearRect(0,0,W,H);const map={};data.movs.filter(m=>m.tipo==='gasto').forEach(m=>{map[m.categoria]=(map[m.categoria]||0)+m.monto});const labels=Object.keys(map),vals=Object.values(map);if(!labels.length)return;const max=Math.max(...vals,1);const barW=W/(labels.length*2.2);labels.forEach((l,i)=>{const x=40+i*(barW*1.8+20);const h=(vals[i]/max)*(H-80);c.fillStyle='#7c5cff';c.beginPath();c.roundRect(x,H-40-h,barW,h,12);c.fill();c.fillStyle='#9a9ab0';c.font='18px Inter';c.fillText(l.slice(0,8),x,H-10)})}
+window.exportData=function(){const b=new Blob([JSON.stringify(data)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='finanzas.json';a.click()}
+window.exportPDF=function(){const {jsPDF}=window.jspdf;const doc=new jsPDF();const mes=new Date().toISOString().slice(0,7);doc.setFontSize(16);doc.text("Kit Financiero - Reporte",10,15);doc.setFontSize(10);doc.text(`Fecha: ${new Date().toLocaleDateString('es-CO')} - Mes: ${mes}`,10,22);let y=32;doc.text(`Balance: ${document.getElementById('balance').textContent}`,10,y);y+=8;doc.text("DEUDAS EN CUOTAS SIN INTERES:",10,y);y+=6;data.deudas.forEach(d=>{const falta=d.total-d.pagado;const cuota=falta/(d.cuotas||1);doc.text(`- ${d.nombre}: Falta ${fmt(falta)} en ${d.cuotas} cuotas de ${fmt(cuota)}`,10,y);y+=5;if(y>280){doc.addPage();y=10}});doc.save(`Finanzas-${mes}.pdf`)}
+window.resetAll=function(){if(confirm('Borrar todo?')){data={movs:[],pres:[],deudas:[],metas:[]};save();location.reload()}}
+initPin(); renderAll();
+document.getElementById('pin').addEventListener('keyup',e=>{if(e.key==='Enter')checkPin()});
+if(currentPin){ document.getElementById('pin').value=currentPin; }
+</script>
+</body>
+</html>
